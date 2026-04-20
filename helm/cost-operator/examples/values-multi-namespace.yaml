@@ -1,0 +1,34 @@
+# Exemple 4: Multi-namespace analysis
+
+image:
+  registry: docker.io
+  repository: yourusername/cost-operator
+  tag: "1.0.0"
+
+config:
+  clusterName: "dev-cluster"
+  prometheusUrl: ""  # Utilise metrics-server
+
+# Plusieurs rapports créés en même temps
+reports:
+  enabled: true
+  default:
+    name: "cluster-analysis"
+    namespace: default
+    scope: "cluster"
+    schedule: "0 */6 * * *"  # Toutes les 6 heures
+    output: "configmap"
+    autoApply: false
+
+# Note: Tu peux aussi créer plusieurs CostReports manuellement:
+# kubectl apply -f - <<EOF
+# apiVersion: cost.k8s.io/v1
+# kind: CostReport
+# metadata:
+#   name: production-analysis
+#   namespace: production
+# spec:
+#   scope: namespace
+#   schedule: "0 * * * *"
+#   output: configmap
+# EOF

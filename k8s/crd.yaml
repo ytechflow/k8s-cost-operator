@@ -1,0 +1,183 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: costreports.cost.k8s.io
+  namespace: kube-system
+spec:
+  group: cost.k8s.io
+  names:
+    kind: CostReport
+    plural: costreports
+    singular: costreport
+    shortNames:
+      - cr
+      - creport
+  scope: Namespaced
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - scope
+              properties:
+                schedule:
+                  type: string
+                  description: "Cron schedule pour les analyses périodiques (ex: '0 * * * *' pour toutes les heures)"
+                  default: "0 * * * *"
+                
+                scope:
+                  type: string
+                  description: "Scope de l'analyse: 'cluster' pour tout le cluster ou 'namespace' pour le namespace actuel"
+                  enum:
+                    - cluster
+                    - namespace
+                  default: "cluster"
+                
+                output:
+                  type: string
+                  description: "Format de sortie du rapport: 'configmap' ou 'file'"
+                  enum:
+                    - configmap
+                    - file
+                  default: "configmap"
+                
+                outputPath:
+                  type: string
+                  description: "Chemin local pour les fichiers de rapport (utilisé si output=file)"
+                  default: "/tmp"
+                
+                autoApply:
+                  type: boolean
+                  description: "Appliquer automatiquement les recommandations"
+                  default: false
+                
+                prometheusUrl:
+                  type: string
+                  description: "URL de Prometheus pour collecter les métriques (ex: http://prometheus:9090). Si vide, utilise metrics-server"
+                
+                clusterName:
+                  type: string
+                  description: "Nom du cluster Kubernetes"
+                  default: "kubernetes"
+                
+                excludeNamespaces:
+                  type: array
+                  description: "Namespaces à exclure de l'analyse"
+                  items:
+                    type: string
+                  default:
+                    - kube-system
+                    - kube-public
+                    - kube-node-lease
+                
+                excludePods:
+                  type: array
+                  description: "Labels des pods à exclure (ex: tier=critical)"
+                  items:
+                    type: object
+                    properties:
+                      key:
+                        type: string
+                      value:
+                        type: string
+            
+            status:
+              type: object
+              properties:
+                lastAnalysis:
+                  type: string
+                  description: "Timestamp de la dernière analyse"
+                
+                status:
+                  type: string
+                  enum:
+                    - pending
+                    - running
+                    - completed
+                    - error
+                
+                error:
+                  type: string
+                  description: "Message d'erreur si applicable"
+                
+                recommendations:
+                  type: integer
+                  description: "Nombre de recommandations"
+                
+                totalSavings:
+                  type: string
+                  description: "Économies potentielles (formatées)"
+                
+                optimizationScore:
+                  type: string
+                  description: "Score d'optimisation global"
+      
+      subresources:
+        status: {}
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cost-operator
+  namespace: kube-system
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cost-operator
+rules:
+  # Lecture des pods
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  
+  # Lecture des déploiements
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+  
+  # Gestion des CRDs
+  - apiGroups: ["cost.k8s.io"]
+    resources: ["costreports"]
+    verbs: ["get", "list", "watch", "create", "patch", "update"]
+  
+  - apiGroups: ["cost.k8s.io"]
+    resources: ["costreports/status"]
+    verbs: ["get", "patch", "update"]
+  
+  # ConfigMaps
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "create", "patch", "update"]
+  
+  # Namespaces
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list"]
+  
+  # Métriques
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cost-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cost-operator
+subjects:
+  - kind: ServiceAccount
+    name: cost-operator
+    namespace: kube-system

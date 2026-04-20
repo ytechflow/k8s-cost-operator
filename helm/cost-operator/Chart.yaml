@@ -1,0 +1,19 @@
+apiVersion: v2
+name: cost-operator
+description: "Kubernetes Cost Optimization Operator - Analyse l'utilisation des ressources et génère des rapports d'optimisation des coûts"
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+home: https://github.com/sayzx/k8s-cost-operator
+sources:
+  - https://github.com/sayzx/k8s-cost-operator
+maintainers:
+  - name: K8s Cost Operator Team
+    email: team@example.com
+keywords:
+  - kubernetes
+  - cost-optimization
+  - finops
+  - monitoring
+  - prometheus
+icon: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='50' text-anchor='middle' font-size='80'%3E💰%3C/text%3E%3C/svg%3E"

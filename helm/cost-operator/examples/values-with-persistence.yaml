@@ -1,0 +1,28 @@
+# Exemple 3: Avec persistence (sauvegarde fichiers)
+
+image:
+  registry: docker.io
+  repository: yourusername/cost-operator
+  tag: "1.0.0"
+
+config:
+  clusterName: "staging"
+  prometheusUrl: "http://prometheus.monitoring:9090"
+
+# Persistence activée
+persistence:
+  enabled: true
+  storageClassName: "standard"
+  size: "5Gi"
+  mountPath: "/reports"
+
+reports:
+  enabled: true
+  default:
+    name: "daily-analysis"
+    namespace: default
+    scope: "cluster"
+    schedule: "0 2 * * *"  # 02:00 UTC chaque jour
+    output: "file"  # Sauvegarde en fichier
+    outputPath: "/reports"
+    autoApply: false

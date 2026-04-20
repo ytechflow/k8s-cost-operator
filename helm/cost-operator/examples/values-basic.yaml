@@ -1,0 +1,17 @@
+# Exemple 1: Installation basique (Docker Hub)
+
+image:
+  registry: docker.io
+  repository: yourusername/cost-operator
+  tag: "1.0.0"
+
+config:
+  clusterName: "production"
+  logLevel: "INFO"
+
+reports:
+  enabled: true
+  default:
+    name: "daily-analysis"
+    namespace: default
+    schedule: "0 0 * * *"

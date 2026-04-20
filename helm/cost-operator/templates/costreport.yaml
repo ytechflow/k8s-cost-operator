@@ -1,0 +1,24 @@
+{{- if .Values.reports.enabled }}
+apiVersion: cost.k8s.io/v1
+kind: CostReport
+metadata:
+  name: {{ .Values.reports.default.name }}
+  namespace: {{ .Values.reports.default.namespace }}
+  labels:
+    app.kubernetes.io/name: {{ include "cost-operator.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  scope: {{ .Values.reports.default.scope }}
+  schedule: {{ .Values.reports.default.schedule | quote }}
+  output: {{ .Values.reports.default.output }}
+  outputPath: {{ .Values.reports.default.outputPath }}
+  autoApply: {{ .Values.reports.default.autoApply }}
+  clusterName: {{ .Values.reports.default.clusterName }}
+  {{- if .Values.reports.default.prometheusUrl }}
+  prometheusUrl: {{ .Values.reports.default.prometheusUrl }}
+  {{- else if .Values.config.prometheusUrl }}
+  prometheusUrl: {{ .Values.config.prometheusUrl }}
+  {{- end }}
+  excludeNamespaces:
+    {{- toYaml .Values.reports.default.excludeNamespaces | nindent 4 }}
+{{- end }}

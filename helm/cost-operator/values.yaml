@@ -1,0 +1,202 @@
+# Values pour la Helm Chart du Cost Operator
+# Tous les paramètres configurables
+
+# Image Docker
+image:
+  # Registry Docker
+  registry: docker.io
+  # Nom du repository
+  repository: yourusername/cost-operator
+  # Tag de l'image
+  tag: "1.0.0"
+  # Politique de pull
+  pullPolicy: IfNotPresent
+
+# Credentials pour private registry (optionnel)
+imagePullSecrets: []
+  # - name: private-registry-secret
+
+# Namespace où déployer l'opérateur
+namespace: kube-system
+
+# Nombre de replicas (généralement 1 pour un opérateur)
+replicaCount: 1
+
+# Stratégie de déploiement
+deploymentStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+
+# Affinity et NodeSelector
+affinity: {}
+  # podAntiAffinity:
+  #   preferredDuringSchedulingIgnoredDuringExecution:
+  #     - weight: 100
+  #       podAffinityTerm:
+  #         labelSelector:
+  #           matchExpressions:
+  #             - key: app
+  #               operator: In
+  #               values:
+  #                 - cost-operator
+  #         topologyKey: kubernetes.io/hostname
+
+nodeSelector: {}
+  # node-role.kubernetes.io/control-plane: ""
+
+tolerations: []
+  # - key: "control-plane"
+  #   operator: "Equal"
+  #   value: "true"
+  #   effect: "NoSchedule"
+
+# Service Account
+serviceAccount:
+  # Créer un ServiceAccount
+  create: true
+  # Nom du ServiceAccount
+  name: cost-operator
+  # Annotations pour le ServiceAccount
+  annotations: {}
+
+# RBAC
+rbac:
+  # Créer les rôles et bindings
+  create: true
+
+# CRD
+crd:
+  # Installer la CRD
+  install: true
+
+# Resources
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# Security Context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# Probes
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: 8080
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 8080
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Service
+service:
+  enabled: true
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+  annotations: {}
+    # prometheus.io/scrape: "true"
+    # prometheus.io/port: "8080"
+
+# Configuration de l'opérateur
+config:
+  # Activer/désactiver le debug
+  debug: false
+  
+  # URL de Prometheus (laisse vide pour utiliser metrics-server)
+  prometheusUrl: ""
+  # prometheusUrl: "http://prometheus:9090"
+  
+  # Nom du cluster
+  clusterName: "kubernetes"
+  
+  # Timeout pour les requêtes Prometheus
+  prometheusTimeout: "10s"
+  
+  # Interval d'analyse par défaut (secondes)
+  analysisInterval: 3600
+  
+  # Namespaces à exclure de l'analyse par défaut
+  excludeNamespaces:
+    - kube-system
+    - kube-public
+    - kube-node-lease
+    - cert-manager
+    - ingress-nginx
+  
+  # Logging
+  logLevel: "INFO"
+
+# ConfigMap avec la configuration de l'opérateur
+configMap:
+  create: true
+  name: cost-operator-config
+  annotations: {}
+
+# Annotations pour le Deployment
+podAnnotations:
+  {}
+  # prometheus.io/scrape: "true"
+  # prometheus.io/port: "8080"
+  # prometheus.io/path: "/metrics"
+
+# Labels pour le Deployment
+podLabels: {}
+
+# Persistence (si tu veux sauvegarder les rapports en fichiers)
+persistence:
+  enabled: false
+  # storageClassName: standard
+  # size: 1Gi
+  # mountPath: /reports
+  # annotations: {}
+
+# Monitoring (ServiceMonitor pour Prometheus)
+monitoring:
+  enabled: false
+  # serviceMonitor:
+  #   interval: 30s
+  #   scrapeTimeout: 10s
+
+# Reports (Configuration par défaut des CostReports)
+reports:
+  # Créer un CostReport par défaut
+  enabled: true
+  
+  # Configuration du rapport par défaut
+  default:
+    name: "daily-analysis"
+    namespace: default
+    scope: "cluster"
+    schedule: "0 0 * * *"  # Minuit chaque jour
+    output: "configmap"
+    outputPath: "/tmp"
+    autoApply: false
+    prometheusUrl: ""
+    clusterName: "kubernetes"
+    excludeNamespaces:
+      - kube-system
+      - kube-public
+      - kube-node-lease

@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cost-operator
+  namespace: kube-system
+  labels:
+    app: cost-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cost-operator
+  template:
+    metadata:
+      labels:
+        app: cost-operator
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      serviceAccountName: cost-operator
+      containers:
+      - name: operator
+        image: cost-operator:latest
+        imagePullPolicy: Always
+        
+        env:
+        - name: KOPF_DEBUG
+          value: "false"
+        
+        - name: PROMETHEUS_URL
+          value: "http://prometheus:9090"
+        
+        - name: CLUSTER_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: cost-operator-config
+              key: cluster-name
+              optional: true
+        
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+      
+      securityContext:
+        fsGroup: 1000
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cost-operator
+  namespace: kube-system
+  labels:
+    app: cost-operator
+spec:
+  ports:
+  - name: metrics
+    port: 8080
+    targetPort: 8080
+  selector:
+    app: cost-operator
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cost-operator-config
+  namespace: kube-system
+data:
+  cluster-name: "production"

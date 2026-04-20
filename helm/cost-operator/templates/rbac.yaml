@@ -1,0 +1,74 @@
+{{- if .Values.rbac.create }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "cost-operator.serviceAccountName" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: {{ include "cost-operator.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "cost-operator.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "cost-operator.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+rules:
+  # Lecture des pods
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  
+  # Lecture des services
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list"]
+  
+  # Déploiements
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+  
+  # CRDs
+  - apiGroups: ["cost.k8s.io"]
+    resources: ["costreports"]
+    verbs: ["get", "list", "watch", "create", "patch", "update"]
+  
+  - apiGroups: ["cost.k8s.io"]
+    resources: ["costreports/status"]
+    verbs: ["get", "patch", "update"]
+  
+  # ConfigMaps
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "create", "patch", "update"]
+  
+  # Namespaces
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list"]
+  
+  # Métriques
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "cost-operator.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "cost-operator.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "cost-operator.fullname" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "cost-operator.serviceAccountName" . }}
+    namespace: {{ .Values.namespace }}
+{{- end }}

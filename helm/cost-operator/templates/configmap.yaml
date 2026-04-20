@@ -1,0 +1,22 @@
+{{- if .Values.configMap.create }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.configMap.name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: {{ include "cost-operator.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  {{- with .Values.configMap.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+data:
+  cluster-name: "{{ .Values.config.clusterName }}"
+  debug: "{{ .Values.config.debug }}"
+  prometheus-url: "{{ .Values.config.prometheusUrl }}"
+  prometheus-timeout: "{{ .Values.config.prometheusTimeout }}"
+  log-level: "{{ .Values.config.logLevel }}"
+  analysis-interval: "{{ .Values.config.analysisInterval }}"
+  exclude-namespaces: "{{ join "," .Values.config.excludeNamespaces }}"
+{{- end }}
