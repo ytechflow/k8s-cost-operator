@@ -4,9 +4,9 @@
 # Image Docker
 image:
   # Registry Docker
-  registry: docker.io
+  registry: ghcr.io
   # Nom du repository
-  repository: yourusername/cost-operator
+  repository: ytechflow/cost-operator
   # Tag de l'image
   tag: "1.0.0"
   # Politique de pull
