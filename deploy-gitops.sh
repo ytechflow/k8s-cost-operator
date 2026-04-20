@@ -8,12 +8,16 @@ set -e
 set -e
 
 # Configuration
-REGISTRY="ghcr.io"
-IMAGE_NAME="ytechflow/cost-operator"
-VERSION="${VERSION:-1.0.0}"
+REGISTRY="harbor.dev01.sayzx.fr"
+IMAGE_NAME="admin/cost-operator"
+VERSION="${VERSION:-latest}"
 NAMESPACE="${NAMESPACE:-cost-operator}"
 RELEASE_NAME="cost-operator"
 HELM_CHART="./helm/cost-operator"
+
+# Credentials pour Harbor
+HARBOR_USER="${HARBOR_USER:-admin}"
+HARBOR_PASSWORD="${HARBOR_PASSWORD:-Harbor12345}"
 
 # Couleurs
 RED='\033[0;31m'
@@ -69,8 +73,8 @@ push_image() {
 
     log_info "Push de l'image vers le registry..."
 
-    # Login si nécessaire
-    echo "${GHCR_TOKEN}" | docker login "${REGISTRY}" -u "${GHCR_USER}" --password-stdin 2>/dev/null || true
+    # Login to Harbor
+    docker login "${REGISTRY}" -u "${HARBOR_USER}" -p "${HARBOR_PASSWORD}"
 
     docker push "${full_image}"
 

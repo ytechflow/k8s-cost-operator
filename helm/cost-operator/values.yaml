@@ -4,11 +4,11 @@
 # Image Docker
 image:
   # Registry Docker
-  registry: ghcr.io
+  registry: harbor.dev01.sayzx.fr
   # Nom du repository
-  repository: ytechflow/cost-operator
+  repository: admin/cost-operator
   # Tag de l'image
-  tag: "1.0.0"
+  tag: "latest"
   # Politique de pull
   pullPolicy: IfNotPresent
 
