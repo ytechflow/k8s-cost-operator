@@ -54,22 +54,18 @@ docker push your-registry/cost-operator:latest
 ### 3. Installer la CRD et le RBAC
 
 ```bash
-kubectl apply -f k8s/crd.yaml
+helm upgrade --install cost-operator ./helm/cost-operator \
+  --namespace cost-operator-system \
+  --create-namespace \
+  --set image.repository=harbor.dev01.sayzx.fr/admin/cost-operator \
+  --set image.tag=latest
 ```
 
-### 4. Installer le Deployment
-
-Modifiez `k8s/deployment.yaml` pour utiliser votre image registry:
+### 4. Vérifier l'installation
 
 ```bash
-kubectl apply -f k8s/deployment.yaml
-```
-
-### 5. Vérifier l'installation
-
-```bash
-kubectl -n kube-system logs -f deployment/cost-operator
-kubectl -n kube-system get pods -l app=cost-operator
+kubectl -n cost-operator-system get pods -l app.kubernetes.io/instance=cost-operator
+kubectl -n cost-operator-system logs -f deployment/cost-operator
 ```
 
 ## 📖 Utilisation
@@ -248,10 +244,10 @@ spec:
 
 ```bash
 # Vérifier les logs
-kubectl -n kube-system logs deployment/cost-operator
+kubectl -n cost-operator-system logs deployment/cost-operator
 
 # Vérifier les RBAC
-kubectl auth can-i list costreports --as=system:serviceaccount:kube-system:cost-operator
+kubectl auth can-i list costreports --as=system:serviceaccount:cost-operator-system:cost-operator
 
 # Vérifier la CRD
 kubectl get crd | grep costreports

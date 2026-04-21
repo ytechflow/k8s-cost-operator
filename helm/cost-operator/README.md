@@ -18,12 +18,12 @@ helm repo update
 ```bash
 # Installation simple
 helm install cost-operator ./helm/cost-operator \
-  --namespace kube-system \
+  --namespace cost-operator-system \
   --create-namespace
 
 # Ou avec tes valeurs
 helm install cost-operator ./helm/cost-operator \
-  --namespace kube-system \
+  --namespace cost-operator-system \
   --values ./helm/cost-operator/examples/values-production.yaml
 ```
 
@@ -126,10 +126,10 @@ helm upgrade cost-operator ./helm/cost-operator \
 
 ```bash
 # Désinstalle tout (garde les CRD)
-helm uninstall cost-operator --namespace kube-system
+helm uninstall cost-operator --namespace cost-operator-system
 
 # Ou avec suppression complète
-helm uninstall cost-operator --namespace kube-system
+helm uninstall cost-operator --namespace cost-operator-system
 kubectl delete crd costreports.cost.k8s.io
 ```
 
@@ -137,10 +137,10 @@ kubectl delete crd costreports.cost.k8s.io
 
 ```bash
 # Vérifier l'installation
-helm status cost-operator --namespace kube-system
+helm status cost-operator --namespace cost-operator-system
 
 # Voir les valeurs appliquées
-helm get values cost-operator --namespace kube-system
+helm get values cost-operator --namespace cost-operator-system
 
 # Voir les manifests générés
 helm template cost-operator ./helm/cost-operator \
@@ -151,7 +151,7 @@ helm template cost-operator ./helm/cost-operator \
 
 ```bash
 # Pods logs
-kubectl -n kube-system logs -f deployment/cost-operator
+kubectl -n cost-operator-system logs -f deployment/cost-operator
 
 # Voir les CostReports créés
 kubectl get costreports -A

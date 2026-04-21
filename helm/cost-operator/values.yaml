@@ -3,10 +3,8 @@
 
 # Image Docker
 image:
-  # Registry Docker
-  registry: harbor.dev01.sayzx.fr
-  # Nom du repository
-  repository: admin/cost-operator
+  # Repository complet de l'image
+  repository: harbor.dev01.sayzx.fr/admin/cost-operator
   # Tag de l'image
   tag: "latest"
   # Politique de pull
@@ -15,9 +13,6 @@ image:
 # Credentials pour private registry (optionnel)
 imagePullSecrets: []
   # - name: private-registry-secret
-
-# Namespace où déployer l'opérateur
-namespace: kube-system
 
 # Nombre de replicas (généralement 1 pour un opérateur)
 replicaCount: 1
@@ -65,11 +60,6 @@ serviceAccount:
 rbac:
   # Créer les rôles et bindings
   create: true
-
-# CRD
-crd:
-  # Installer la CRD
-  install: true
 
 # Resources
 resources:

@@ -18,7 +18,7 @@ COPY analyzer.py .
 COPY report.py .
 
 # Crée l'utilisateur non-root
-RUN useradd -m -u 1000 operator && \
+RUN (groupadd -f operator || true) && useradd -m -u 1000 -g operator operator && \
     chown -R operator:operator /app
 
 USER operator

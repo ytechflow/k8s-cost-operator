@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git init *)",
+      "Bash(gh auth *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git remote *)",
+      "Bash(git branch *)",
+      "Bash(git push *)",
+      "Bash(kubectl cluster-info *)",
+      "Bash(git commit -m 'chore: update Helm values for GHCR.io registry *)",
+      "Bash(git commit -m 'feat: add GitOps deployment script *)"
+    ]
+  }
+}

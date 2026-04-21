@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "cost-operator.fullname" . }}
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Release.Namespace }}
   labels:
     app.kubernetes.io/name: {{ include "cost-operator.name" . }}
     app.kubernetes.io/instance: {{ .Release.Name }}
@@ -41,7 +41,7 @@ spec:
       
       containers:
       - name: operator
-        image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         
         ports:
@@ -52,6 +52,9 @@ spec:
         env:
         - name: KOPF_DEBUG
           value: "{{ .Values.config.debug }}"
+
+        - name: KOPF_LOGLEVEL
+          value: "{{ .Values.config.logLevel }}"
         
         - name: PROMETHEUS_URL
           valueFrom:
