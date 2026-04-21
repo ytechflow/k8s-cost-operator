@@ -39,8 +39,12 @@ REPORT_FOLDER_ANNOTATION = "cost.k8s.io/folder"
 
 
 def _normalize_folder(folder: Optional[str]) -> str:
-    """Normalise un nom de dossier pour stockage et affichage."""
-    return (folder or "").strip()
+    """Normalise un chemin de dossier logique (format a/b/c)."""
+    raw = (folder or "").strip().replace("\\", "/")
+    if not raw:
+        return ""
+    parts = [part.strip() for part in raw.split("/") if part.strip()]
+    return "/".join(parts)
 
 
 def _display_folder(folder: str) -> str:
@@ -344,62 +348,16 @@ def _read_latest_report_statuses(limit: int = 50):
 
 
 def _render_frontend_html() -> str:
-        """Construit un front HTML léger pour visualiser les analyses récentes."""
-        reports = _read_latest_report_statuses(limit=100)
-        rows = []
-        folders = []
-        seen_folders = set()
-
-        for report in reports:
-                folder_label = _display_folder(report["folder"])
-                if folder_label not in seen_folders:
-                        seen_folders.add(folder_label)
-                        folders.append(folder_label)
-
-                view_link = "-"
-                if report["report"]:
-                        view_link = (
-                                f"<a href='/report/{report['namespace']}/{report['report']}'>"
-                                "ouvrir le rapport"
-                                "</a>"
-                        )
-
-                rows.append(
-                        f"<tr data-folder='{escape(folder_label)}'>"
-                        f"<td>{escape(folder_label)}</td>"
-                        f"<td>{escape(report['namespace'])}</td>"
-                        f"<td>{escape(report['report_name'])}</td>"
-                        f"<td>{escape(report['timestamp'] or '-')}</td>"
-                        f"<td>{escape(report['status'])}</td>"
-                        f"<td>{escape(report['recommendations'] or '-')}</td>"
-                        f"<td>{escape(report['savings'] or '-')}</td>"
-                        f"<td>{escape(report['score'] or '-')}</td>"
-                        f"<td>{view_link}</td>"
-                        "<td>"
-                        "<div class='row-tools'>"
-                        f"<input class='folder-field' type='text' value='{escape(report['folder'])}' placeholder='Sans dossier' />"
-                        f"<button class='secondary folder-save' data-namespace='{escape(report['namespace'])}' data-report='{escape(report['report_name'])}'>Déplacer</button>"
-                        f"<button class='danger report-delete' data-namespace='{escape(report['namespace'])}' data-report='{escape(report['report_name'])}'>Supprimer</button>"
-                        "</div>"
-                        "</td>"
-                        "</tr>"
-                )
-
-        folder_options = "".join(
-                f"<option value='{escape(folder)}'>{escape(folder)}</option>"
-                for folder in folders
-        )
-
-        table_body = "".join(rows) or (
-                "<tr><td colspan='10'>Aucun rapport trouvé pour le moment.</td></tr>"
-        )
+        """Construit un front type explorateur pour naviguer les rapports par dossier."""
+        reports = _read_latest_report_statuses(limit=200)
+        reports_json = json.dumps(reports, ensure_ascii=True).replace("</", "<\\/")
 
         return f"""<!doctype html>
 <html lang='fr'>
 <head>
     <meta charset='utf-8' />
     <meta name='viewport' content='width=device-width, initial-scale=1' />
-    <title>Cost Operator Front</title>
+    <title>Cost Operator Explorer</title>
     <style>
         :root {{
             --bg: #0b1320;
@@ -409,6 +367,8 @@ def _render_frontend_html() -> str:
             --muted: #9cb0d3;
             --accent: #1fc3a7;
             --border: #2a3b56;
+            --warn: #8f2f2f;
+            --folder: #f5c451;
         }}
         body {{
             margin: 0;
@@ -417,147 +377,407 @@ def _render_frontend_html() -> str:
             background: radial-gradient(circle at 10% 20%, #132746 0%, var(--bg) 40%), var(--bg2);
             min-height: 100vh;
         }}
-        .wrap {{ max-width: 1280px; margin: 0 auto; padding: 24px; }}
-        h1 {{ margin-bottom: 8px; }}
-        p {{ color: var(--muted); margin-top: 0; }}
-        .card {{
-            background: color-mix(in oklab, var(--card), black 8%);
+        .wrap {{ max-width: 1400px; margin: 0 auto; padding: 20px; }}
+        .top {{ display: grid; gap: 8px; margin-bottom: 14px; }}
+        .title {{ margin: 0; }}
+        .subtitle {{ margin: 0; color: var(--muted); }}
+        .layout {{ display: grid; grid-template-columns: 300px 1fr; gap: 14px; }}
+        .pane {{
             border: 1px solid var(--border);
-            border-radius: 14px;
+            background: color-mix(in oklab, var(--card), black 8%);
+            border-radius: 12px;
             overflow: hidden;
         }}
-        .filters {{
-            display: flex;
-            gap: 12px;
-            align-items: center;
-            margin: 18px 0 14px;
-            flex-wrap: wrap;
+        .pane-title {{
+            margin: 0;
+            padding: 10px 12px;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            background: color-mix(in oklab, var(--card), black 15%);
+            border-bottom: 1px solid var(--border);
+            color: var(--muted);
         }}
-        .filters label {{ color: var(--muted); font-size: 13px; }}
-        .filters select {{ width: auto; min-width: 220px; }}
-        table {{ width: 100%; border-collapse: collapse; font-size: 14px; }}
-        th, td {{ padding: 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }}
-        th {{ background: color-mix(in oklab, var(--card), black 15%); }}
-        tr:hover td {{ background: color-mix(in oklab, var(--card), black 6%); }}
-        a {{ color: var(--accent); text-decoration: none; }}
-        .actions {{ margin-top: 20px; }}
-        .actions h2 {{ font-size: 1.1rem; margin-bottom: 10px; }}
-        .action-grid {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-            gap: 14px;
-        }}
-        .action-card {{
-            padding: 14px;
-            border-radius: 12px;
-            border: 1px solid var(--border);
-            background: color-mix(in oklab, var(--card), black 6%);
-        }}
-        .action-card h3 {{ margin-bottom: 8px; }}
-        .action-card p {{ margin-bottom: 10px; font-size: 13px; }}
-        button, select, input {{
+        .tree {{ list-style: none; margin: 0; padding: 8px; max-height: 520px; overflow: auto; }}
+        .tree-item {{ margin: 2px 0; }}
+        .tree-btn {{
             width: 100%;
-            padding: 10px;
-            border-radius: 10px;
+            text-align: left;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text);
+            padding: 6px 8px;
+            cursor: pointer;
+            font-size: 13px;
+        }}
+        .tree-btn:hover {{ background: #0f1b2e; }}
+        .tree-btn.active {{ border-color: var(--accent); background: rgba(31, 195, 167, 0.12); }}
+        .explorer-head {{
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+            display: grid;
+            gap: 8px;
+        }}
+        .breadcrumbs {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            align-items: center;
+            font-size: 13px;
+            color: var(--muted);
+        }}
+        .crumb {{ color: var(--accent); cursor: pointer; }}
+        .toolbar {{ display: grid; grid-template-columns: 1fr 1fr auto auto; gap: 8px; }}
+        input, select, button {{
+            padding: 9px;
+            border-radius: 8px;
             border: 1px solid var(--border);
             background: #0f1b2e;
             color: var(--text);
             box-sizing: border-box;
         }}
-        button {{
-            margin-top: 8px;
-            background: var(--accent);
-            color: #07221d;
-            font-weight: 700;
-            cursor: pointer;
-            border: none;
+        button {{ background: var(--accent); color: #07221d; font-weight: 700; border: none; cursor: pointer; }}
+        button.secondary {{ background: #21324d; color: var(--text); border: 1px solid var(--border); }}
+        button.danger {{ background: var(--warn); color: #fff; }}
+        .list {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
+        .list th, .list td {{ padding: 10px; border-bottom: 1px solid var(--border); text-align: left; }}
+        .list th {{ color: var(--muted); font-weight: 600; background: color-mix(in oklab, var(--card), black 15%); }}
+        .list tr:hover td {{ background: color-mix(in oklab, var(--card), black 6%); }}
+        .name-cell {{ display: flex; align-items: center; gap: 8px; }}
+        .folder-icon {{ color: var(--folder); }}
+        .file-icon {{ color: #8ed1ff; }}
+        .clickable {{ cursor: pointer; }}
+        .clickable:hover {{ text-decoration: underline; }}
+        .status {{ padding: 8px 12px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--border); }}
+        .actions {{ margin-top: 14px; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }}
+        .action-card {{
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: color-mix(in oklab, var(--card), black 6%);
+            display: grid;
+            gap: 8px;
         }}
-        button.secondary {{ background: #21324d; color: var(--text); }}
-        button.danger {{ background: #8f2f2f; color: #fff; }}
-        .row-tools {{ display: grid; gap: 8px; min-width: 260px; }}
-        #action-status {{ margin-top: 10px; color: var(--muted); font-size: 13px; }}
-        .links {{ margin-top: 16px; display: flex; gap: 14px; flex-wrap: wrap; }}
-        @media (max-width: 760px) {{
-            table {{ font-size: 12px; }}
-            th, td {{ padding: 8px; }}
+        .action-card h3 {{ margin: 0; font-size: 15px; }}
+        .action-card p {{ margin: 0; color: var(--muted); font-size: 12px; }}
+        .links {{ margin-top: 12px; display: flex; gap: 10px; flex-wrap: wrap; }}
+        .links a {{ color: var(--accent); text-decoration: none; font-size: 12px; }}
+        @media (max-width: 980px) {{
+            .layout {{ grid-template-columns: 1fr; }}
+            .toolbar {{ grid-template-columns: 1fr 1fr; }}
         }}
     </style>
 </head>
 <body>
     <div class='wrap'>
-        <h1>K8s Cost Operator</h1>
-        <p>Vue rapide des analyses générées par l'opérateur.</p>
-        <div class='filters'>
-            <label for='folder-filter'>Filtrer par dossier</label>
-            <select id='folder-filter'>
-                <option value='__all__'>Tous les dossiers</option>
-                {folder_options}
-            </select>
+        <div class='top'>
+            <h1 class='title'>K8s Cost Operator Explorer</h1>
+            <p class='subtitle'>Navigation des rapports comme un explorateur: dossiers, sous-dossiers, déplacement et suppression.</p>
         </div>
-        <div class='card'>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Dossier</th>
-                        <th>Namespace</th>
-                        <th>Rapport</th>
-                        <th>Timestamp</th>
-                        <th>Etat</th>
-                        <th>Reco</th>
-                        <th>Economies</th>
-                        <th>Score</th>
-                        <th>Rapport</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>{table_body}</tbody>
-            </table>
+
+        <div class='layout'>
+            <section class='pane'>
+                <h2 class='pane-title'>Arborescence</h2>
+                <ul id='folder-tree' class='tree'></ul>
+            </section>
+
+            <section class='pane'>
+                <h2 class='pane-title'>Contenu</h2>
+                <div class='explorer-head'>
+                    <div id='breadcrumbs' class='breadcrumbs'></div>
+                    <div class='toolbar'>
+                        <input id='target-folder' type='text' placeholder='Dossier cible (ex: prod/backend)' />
+                        <input id='new-folder' type='text' placeholder='Nouveau dossier dans le chemin courant' />
+                        <button id='btn-move' class='secondary'>Deplacer selection</button>
+                        <button id='btn-delete' class='danger'>Supprimer selection</button>
+                    </div>
+                </div>
+
+                <table class='list'>
+                    <thead>
+                        <tr>
+                            <th style='width: 30px;'><input id='select-all' type='checkbox' /></th>
+                            <th>Nom</th>
+                            <th>Type</th>
+                            <th>Namespace</th>
+                            <th>Date</th>
+                            <th>Etat</th>
+                            <th>Score</th>
+                            <th>Reco</th>
+                            <th>Economies</th>
+                        </tr>
+                    </thead>
+                    <tbody id='explorer-body'></tbody>
+                </table>
+                <div id='action-status' class='status'>Pret.</div>
+            </section>
         </div>
+
         <div class='actions'>
-            <h2>Déclencher un rapport</h2>
-            <div class='action-grid'>
-                <div class='action-card'>
-                    <h3>Rapport Global</h3>
-                    <p>Analyse tous les namespaces (hors exclusions par défaut).</p>
-                    <input id='folder-input-global' type='text' placeholder='Dossier du rapport' />
-                    <button id='btn-global'>Générer un rapport global</button>
-                </div>
-                <div class='action-card'>
-                    <h3>Rapport Namespace</h3>
-                    <p>Sélectionne un namespace précis et lance l'analyse dédiée.</p>
-                    <select id='namespace-select'></select>
-                    <input id='folder-input-namespace' type='text' placeholder='Dossier du rapport' />
-                    <button id='btn-ns'>Générer un rapport namespace</button>
-                </div>
+            <div class='action-card'>
+                <h3>Generer rapport global</h3>
+                <p>Le rapport est cree dans le dossier courant.</p>
+                <button id='btn-global'>Generer</button>
             </div>
-            <div id='action-status'>Prêt.</div>
+            <div class='action-card'>
+                <h3>Generer rapport namespace</h3>
+                <p>Le rapport est cree dans le dossier courant.</p>
+                <select id='namespace-select'></select>
+                <button id='btn-ns'>Generer</button>
+            </div>
         </div>
+
         <div class='links'>
             <a href='/healthz'>/healthz</a>
             <a href='/ready'>/ready</a>
             <a href='/api/reports'>/api/reports</a>
             <a href='/api/namespaces'>/api/namespaces</a>
-            <a href='/api/folders'>/api/folders</a>
         </div>
     </div>
+
     <script>
+        const reports = {reports_json};
         const statusEl = document.getElementById('action-status');
         const nsSelect = document.getElementById('namespace-select');
-        const folderFilter = document.getElementById('folder-filter');
-        const folderInputGlobal = document.getElementById('folder-input-global');
-        const folderInputNamespace = document.getElementById('folder-input-namespace');
+        const treeEl = document.getElementById('folder-tree');
+        const bodyEl = document.getElementById('explorer-body');
+        const breadcrumbsEl = document.getElementById('breadcrumbs');
+        const targetFolderEl = document.getElementById('target-folder');
+        const newFolderEl = document.getElementById('new-folder');
+        const selectAllEl = document.getElementById('select-all');
+
+        let currentFolder = '';
+        const selected = new Set();
 
         const setStatus = (msg) => {{ statusEl.textContent = msg; }};
 
-        const normalizeFolder = (value) => (value || '').trim();
-        const folderLabel = (value) => value ? value : 'Sans dossier';
+        const normalizeFolder = (value) => {{
+            return (value || '').replace(/\\/g, '/').split('/').map(v => v.trim()).filter(Boolean).join('/');
+        }};
 
-        function applyFolderFilter() {{
-            const selected = folderFilter.value;
-            document.querySelectorAll('tbody tr[data-folder]').forEach((row) => {{
-                const folder = row.getAttribute('data-folder') || '';
-                row.style.display = selected === '__all__' || selected === folder ? '' : 'none';
+        const folderLabel = (value) => value || 'Sans dossier';
+
+        const reportKey = (report) => `${{report.namespace}}::${{report.report_name}}`;
+
+        function folderPathParts(folder) {{
+            const clean = normalizeFolder(folder);
+            return clean ? clean.split('/') : [];
+        }}
+
+        function getAllFolderPaths() {{
+            const set = new Set(['']);
+            reports.forEach((report) => {{
+                const parts = folderPathParts(report.folder || '');
+                let current = '';
+                for (const part of parts) {{
+                    current = current ? `${{current}}/${{part}}` : part;
+                    set.add(current);
+                }}
             }});
+            return Array.from(set).sort((a, b) => a.localeCompare(b));
+        }}
+
+        function getChildFolders(parent) {{
+            const parentParts = folderPathParts(parent);
+            const all = getAllFolderPaths();
+            const children = [];
+            all.forEach((path) => {{
+                const parts = folderPathParts(path);
+                if (parts.length !== parentParts.length + 1) return;
+                if (parts.slice(0, parentParts.length).join('/') !== parentParts.join('/')) return;
+                children.push(path);
+            }});
+            return children.sort((a, b) => a.localeCompare(b));
+        }}
+
+        function buildTree(parent = '', depth = 0) {{
+            const children = getChildFolders(parent);
+            children.forEach((child) => {{
+                const li = document.createElement('li');
+                li.className = 'tree-item';
+                const btn = document.createElement('button');
+                btn.className = 'tree-btn';
+                if (child === currentFolder) btn.classList.add('active');
+                btn.style.paddingLeft = `${{8 + depth * 14}}px`;
+                btn.textContent = `📁 ${{child.split('/').pop()}}`;
+                btn.addEventListener('click', () => {{
+                    currentFolder = child;
+                    selected.clear();
+                    render();
+                }});
+                li.appendChild(btn);
+                treeEl.appendChild(li);
+                buildTree(child, depth + 1);
+            }});
+        }}
+
+        function renderBreadcrumbs() {{
+            const parts = folderPathParts(currentFolder);
+            const crumbs = [];
+            crumbs.push(`<span class='crumb' data-path=''>Racine</span>`);
+            let path = '';
+            parts.forEach((part) => {{
+                path = path ? `${{path}}/${{part}}` : part;
+                crumbs.push(`<span>/</span><span class='crumb' data-path='${{path}}'>${{part}}</span>`);
+            }});
+            breadcrumbsEl.innerHTML = crumbs.join(' ');
+            breadcrumbsEl.querySelectorAll('.crumb').forEach((el) => {{
+                el.addEventListener('click', () => {{
+                    currentFolder = el.dataset.path || '';
+                    selected.clear();
+                    render();
+                }});
+            }});
+        }}
+
+        function renderTree() {{
+            treeEl.innerHTML = '';
+            const rootLi = document.createElement('li');
+            rootLi.className = 'tree-item';
+            const rootBtn = document.createElement('button');
+            rootBtn.className = 'tree-btn';
+            if (currentFolder === '') rootBtn.classList.add('active');
+            rootBtn.textContent = '📁 Racine';
+            rootBtn.addEventListener('click', () => {{
+                currentFolder = '';
+                selected.clear();
+                render();
+            }});
+            rootLi.appendChild(rootBtn);
+            treeEl.appendChild(rootLi);
+            buildTree('', 1);
+        }}
+
+        function renderBody() {{
+            const childrenFolders = getChildFolders(currentFolder);
+            const inCurrent = reports.filter((report) => normalizeFolder(report.folder || '') === currentFolder);
+            const rows = [];
+
+            childrenFolders.forEach((folderPath) => {{
+                const name = folderPath.split('/').pop();
+                rows.push(`
+                    <tr>
+                        <td></td>
+                        <td class='name-cell'><span class='folder-icon'>📁</span><span class='clickable open-folder' data-path='${{folderPath}}'>${{name}}</span></td>
+                        <td>Dossier</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>-</td>
+                    </tr>
+                `);
+            }});
+
+            inCurrent.forEach((report) => {{
+                const key = reportKey(report);
+                const checked = selected.has(key) ? 'checked' : '';
+                const canOpen = report.report ? `<a class='clickable' href='/report/${{report.namespace}}/${{report.report}}' target='_blank'>${{report.report_name}}</a>` : report.report_name;
+                rows.push(`
+                    <tr>
+                        <td><input type='checkbox' class='select-report' data-key='${{key}}' ${{checked}} /></td>
+                        <td class='name-cell'><span class='file-icon'>📄</span>${{canOpen}}</td>
+                        <td>Rapport</td>
+                        <td>${{report.namespace}}</td>
+                        <td>${{report.timestamp || '-'}}</td>
+                        <td>${{report.status || '-'}}</td>
+                        <td>${{report.score || '-'}}</td>
+                        <td>${{report.recommendations || '-'}}</td>
+                        <td>${{report.savings || '-'}}</td>
+                    </tr>
+                `);
+            }});
+
+            bodyEl.innerHTML = rows.join('') || "<tr><td colspan='9'>Dossier vide.</td></tr>";
+
+            bodyEl.querySelectorAll('.open-folder').forEach((el) => {{
+                el.addEventListener('click', () => {{
+                    currentFolder = el.dataset.path || '';
+                    selected.clear();
+                    render();
+                }});
+            }});
+
+            bodyEl.querySelectorAll('.select-report').forEach((el) => {{
+                el.addEventListener('change', () => {{
+                    const key = el.dataset.key;
+                    if (el.checked) selected.add(key); else selected.delete(key);
+                }});
+            }});
+        }}
+
+        async function patchFolder(namespace, reportName, folder) {{
+            const res = await fetch('/api/reports/folder', {{
+                method: 'PATCH',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{ namespace, report_name: reportName, folder }})
+            }});
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'mise a jour impossible');
+            return data;
+        }}
+
+        async function deleteReport(namespace, reportName) {{
+            const res = await fetch('/api/reports', {{
+                method: 'DELETE',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{ namespace, report_name: reportName }})
+            }});
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'suppression impossible');
+            return data;
+        }}
+
+        function selectedReports() {{
+            const map = new Map(reports.map((r) => [reportKey(r), r]));
+            return Array.from(selected).map((k) => map.get(k)).filter(Boolean);
+        }}
+
+        async function moveSelection() {{
+            const reportsToMove = selectedReports();
+            if (!reportsToMove.length) {{
+                setStatus('Aucun rapport selectionne.');
+                return;
+            }}
+
+            const newFolderName = normalizeFolder(newFolderEl.value);
+            const target = newFolderName
+                ? normalizeFolder(currentFolder ? `${{currentFolder}}/${{newFolderName}}` : newFolderName)
+                : normalizeFolder(targetFolderEl.value || currentFolder);
+
+            setStatus(`Deplacement de ${{reportsToMove.length}} rapport(s) vers ${{folderLabel(target)}}...`);
+            for (const report of reportsToMove) {{
+                await patchFolder(report.namespace, report.report_name, target);
+                report.folder = target;
+            }}
+            selected.clear();
+            newFolderEl.value = '';
+            targetFolderEl.value = '';
+            setStatus('Deplacement termine.');
+            render();
+        }}
+
+        async function deleteSelection() {{
+            const reportsToDelete = selectedReports();
+            if (!reportsToDelete.length) {{
+                setStatus('Aucun rapport selectionne.');
+                return;
+            }}
+            if (!window.confirm(`Supprimer ${{reportsToDelete.length}} rapport(s) ?`)) return;
+
+            setStatus(`Suppression de ${{reportsToDelete.length}} rapport(s)...`);
+            for (const report of reportsToDelete) {{
+                await deleteReport(report.namespace, report.report_name);
+            }}
+            const deletedKeys = new Set(reportsToDelete.map((r) => reportKey(r)));
+            for (let i = reports.length - 1; i >= 0; i--) {{
+                if (deletedKeys.has(reportKey(reports[i]))) reports.splice(i, 1);
+            }}
+            selected.clear();
+            setStatus('Suppression terminee.');
+            render();
         }}
 
         async function loadNamespaces() {{
@@ -572,100 +792,49 @@ def _render_frontend_html() -> str:
                     opt.textContent = ns;
                     nsSelect.appendChild(opt);
                 }});
-                setStatus('Namespaces chargés.');
             }} catch (e) {{
                 setStatus('Impossible de charger les namespaces.');
             }}
         }}
 
         async function generate(scope, namespace='') {{
-            setStatus('Génération en cours...');
+            setStatus('Generation en cours...');
             try {{
-                const folder = scope === 'namespace' ? normalizeFolder(folderInputNamespace.value) : normalizeFolder(folderInputGlobal.value);
                 const res = await fetch('/api/reports/generate', {{
                     method: 'POST',
                     headers: {{ 'Content-Type': 'application/json' }},
-                    body: JSON.stringify({{ scope, namespace, folder }})
+                    body: JSON.stringify({{ scope, namespace, folder: currentFolder }})
                 }});
                 const data = await res.json();
-                if (!res.ok) {{
-                    setStatus(`Erreur: ${{data.error || 'échec génération'}}`);
-                    return;
-                }}
-                setStatus(`Rapport lancé: ${{data.name}} (${{data.namespace}})`);
-                setTimeout(() => window.location.reload(), 2500);
+                if (!res.ok) throw new Error(data.error || 'echec generation');
+                setStatus(`Rapport lance: ${{data.name}}`);
+                setTimeout(() => window.location.reload(), 1200);
             }} catch (e) {{
-                setStatus('Erreur réseau lors de la génération.');
+                setStatus(`Erreur: ${{e.message || 'generation impossible'}}`);
             }}
         }}
 
-        async function patchFolder(namespace, reportName, folder) {{
-            const res = await fetch('/api/reports/folder', {{
-                method: 'PATCH',
-                headers: {{ 'Content-Type': 'application/json' }},
-                body: JSON.stringify({{ namespace, report_name: reportName, folder }})
-            }});
-            const data = await res.json();
-            if (!res.ok) {{
-                throw new Error(data.error || 'mise à jour du dossier impossible');
-            }}
-            return data;
+        function render() {{
+            renderTree();
+            renderBreadcrumbs();
+            renderBody();
         }}
 
-        async function deleteReport(namespace, reportName) {{
-            const res = await fetch('/api/reports', {{
-                method: 'DELETE',
-                headers: {{ 'Content-Type': 'application/json' }},
-                body: JSON.stringify({{ namespace, report_name: reportName }})
-            }});
-            const data = await res.json();
-            if (!res.ok) {{
-                throw new Error(data.error || 'suppression impossible');
-            }}
-            return data;
-        }}
-
-        document.querySelectorAll('.folder-save').forEach((button) => {{
-            button.addEventListener('click', async () => {{
-                const namespace = button.dataset.namespace;
-                const reportName = button.dataset.report;
-                const field = button.closest('tr').querySelector('.folder-field');
-                const folder = normalizeFolder(field ? field.value : '');
-                setStatus(`Déplacement de ${{reportName}} vers ${{folderLabel(folder)}}...`);
-                try {{
-                    await patchFolder(namespace, reportName, folder);
-                    setStatus(`Dossier mis à jour pour ${{reportName}}.`);
-                    setTimeout(() => window.location.reload(), 1000);
-                }} catch (error) {{
-                    setStatus(`Erreur: ${{error.message}}`);
-                }}
-            }});
-        }});
-
-        document.querySelectorAll('.report-delete').forEach((button) => {{
-            button.addEventListener('click', async () => {{
-                const namespace = button.dataset.namespace;
-                const reportName = button.dataset.report;
-                if (!window.confirm(`Supprimer le rapport ${{reportName}} ?`)) {{
-                    return;
-                }}
-                setStatus(`Suppression de ${{reportName}}...`);
-                try {{
-                    await deleteReport(namespace, reportName);
-                    setStatus(`Rapport supprimé: ${{reportName}}.`);
-                    setTimeout(() => window.location.reload(), 1000);
-                }} catch (error) {{
-                    setStatus(`Erreur: ${{error.message}}`);
-                }}
-            }});
-        }});
-
+        document.getElementById('btn-move').addEventListener('click', () => moveSelection().catch((e) => setStatus(`Erreur: ${{e.message}}`)));
+        document.getElementById('btn-delete').addEventListener('click', () => deleteSelection().catch((e) => setStatus(`Erreur: ${{e.message}}`)));
         document.getElementById('btn-global').addEventListener('click', () => generate('cluster'));
         document.getElementById('btn-ns').addEventListener('click', () => generate('namespace', nsSelect.value));
-        folderFilter.addEventListener('change', applyFolderFilter);
+        selectAllEl.addEventListener('change', () => {{
+            const checks = bodyEl.querySelectorAll('.select-report');
+            checks.forEach((c) => {{
+                c.checked = selectAllEl.checked;
+                const key = c.dataset.key;
+                if (selectAllEl.checked) selected.add(key); else selected.delete(key);
+            }});
+        }});
 
         loadNamespaces();
-        applyFolderFilter();
+        render();
     </script>
 </body>
 </html>

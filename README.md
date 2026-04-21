@@ -83,7 +83,13 @@ Puis ouvrir:
 - `http://localhost:8080/ready`
 - `http://localhost:8080/api/reports`
 
-Depuis le front, tu peux aussi filtrer les rapports par dossier, déplacer un rapport dans un dossier, ou le supprimer directement.
+Depuis le front, tu as maintenant une vue type explorateur:
+
+- arborescence de dossiers / sous-dossiers
+- navigation par breadcrumbs
+- sélection multiple de rapports
+- déplacement en lot vers un dossier cible
+- suppression en lot
 
 ## 📖 Utilisation
 
