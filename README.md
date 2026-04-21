@@ -188,14 +188,66 @@ Analyse les déploiements avec replicas non-ready
 
 ## 💰 Modèle de coûts
 
-Par défaut (peut être personnalisé):
-- **CPU**: $10/core/mois
-- **Mémoire**: $1/GiB/mois
+Le calcul des économies est basé sur le tarif public OVHcloud en **France (Gravelines)**,
+en prenant comme référence le flavor **b3-8**:
 
-Les économies sont estimées basées sur:
+| Flavor | RAM | vCPU | Prix horaire HT | Prix mensuel HT |
+|---|---:|---:|---:|---:|
+| b3-8 | 8 Go | 2 | 0,0512 € / h | 38 € / mois |
+
+Source: page tarifs OVHcloud Public Cloud, section Virtual Machine Instances, France (Gravelines).
+
+### Principe de calcul
+
+On convertit chaque workload en nombre de blocs équivalents au flavor b3-8:
+
+```text
+blocs = max(CPU requis / 2, RAM requise en GiB / 8)
+coût horaire = blocs × 0,0512
+coût hebdo = blocs × 0,0512 × 168
+coût mensuel = blocs × 38
 ```
-Économies = (CPU_reduction * 10 + Memory_reduction_GiB * 1) * nombre_replicas
+
+Le moteur calcule ensuite l’économie entre l’état courant et l’état recommandé:
+
+```text
+économie = coût courant - coût recommandé
 ```
+
+### Barème de conversion
+
+| Ressource | Équivalent b3-8 | Prix HT |
+|---|---:|---:|
+| 2 vCPU | 1 bloc | 0,0512 € / h |
+| 8 Go RAM | 1 bloc | 0,0512 € / h |
+| 1 vCPU | 0,5 bloc | 0,0256 € / h |
+| 4 Go RAM | 0,5 bloc | 0,0256 € / h |
+
+### Exemples de calcul
+
+#### Exemple 1: instance complète b3-8
+
+| Période | Calcul | Montant |
+|---|---|---:|
+| Heure | 1 × 0,0512 | 0,0512 € |
+| Semaine | 0,0512 × 168 | 8,6016 € |
+| Mois | valeur contractuelle OVHcloud | 38,00 € |
+
+#### Exemple 2: réduction de 1 bloc b3-8
+
+Si un workload passe de 2 vCPU / 8 Go à 1 vCPU / 4 Go:
+
+| Période | Avant | Après | Économie |
+|---|---|---|---:|
+| Heure | 0,0512 € | 0,0256 € | 0,0256 € |
+| Semaine | 8,6016 € | 4,3008 € | 4,3008 € |
+| Mois | 38,00 € | 19,00 € | 19,00 € |
+
+### Règle pratique
+
+- Si CPU et RAM baissent mais restent dans le même bloc b3-8, l’économie peut être nulle.
+- L’économie réelle apparaît quand la réduction fait passer le workload au bloc inférieur.
+- Les montants affichés sont des estimations HT pour aider au dimensionnement, pas une facture OVHcloud exacte.
 
 ## 🎓 Développement
 

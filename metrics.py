@@ -220,12 +220,24 @@ class MetricsCollector:
                 for deploy in deploys.items:
                     deploy_key = f"{deploy.metadata.namespace}/{deploy.metadata.name}"
                     status = deploy.status
+
+                    cpu_request_per_replica = 0.0
+                    memory_request_per_replica = 0.0
+                    for container in deploy.spec.template.spec.containers:
+                        resources = container.resources or {}
+                        req = resources.requests or {}
+                        if req.get('cpu'):
+                            cpu_request_per_replica += self._parse_cpu(req['cpu'])
+                        if req.get('memory'):
+                            memory_request_per_replica += self._parse_memory(req['memory'])
                     
                     deployments[deploy_key] = {
                         'desired_replicas': deploy.spec.replicas or 1,
                         'current_replicas': status.replicas or 0,
                         'ready_replicas': status.ready_replicas or 0,
                         'updated_replicas': status.updated_replicas or 0,
+                        'cpu_request_per_replica': cpu_request_per_replica,
+                        'memory_request_per_replica': memory_request_per_replica,
                         'labels': deploy.spec.selector.match_labels or {}
                     }
             

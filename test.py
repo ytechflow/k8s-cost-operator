@@ -60,7 +60,7 @@ def test_analyzer():
         # Teste les économies totales
         savings = analyzer.calculate_total_savings()
         assert savings >= 0, f"Économies invalides: {savings}"
-        print(f"  ✅ Économies totales: ${savings:.2f}/mois")
+        print(f"  ✅ Économies totales: €{savings:.2f}/mois")
         
         print("✅ Analyseur: PASSED\n")
         return True

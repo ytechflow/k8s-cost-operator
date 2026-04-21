@@ -24,6 +24,9 @@ class Recommendation:
     current_replicas: int = 1
     recommended_replicas: int = 1
     estimated_savings_percent: float = 0.0
+    estimated_savings_hourly: float = 0.0
+    estimated_savings_weekly: float = 0.0
+    estimated_savings_monthly: float = 0.0
     reasoning: str = ""
     priority: str = "medium"  # low, medium, high
     
@@ -34,9 +37,12 @@ class Recommendation:
 class CostAnalyzer:
     """Analyse les coûts et génère des recommandations d'optimisation"""
     
-    # Facteurs de coût approximatifs ($/core/mois, $/GiB/mois)
-    CPU_COST_PER_MONTH = 10  # $ par core/mois
-    MEMORY_COST_PER_MONTH = 1  # $ par GiB/mois
+    # Barème de référence: 8 GiB / 2 vCPU = 0.0512 €/h HT et 38 €/mois
+    REFERENCE_CPU_CORES = 2.0
+    REFERENCE_MEMORY_GIB = 8.0
+    REFERENCE_RATE_PER_HOUR = 0.0512
+    REFERENCE_RATE_PER_WEEK = REFERENCE_RATE_PER_HOUR * 24 * 7
+    REFERENCE_RATE_PER_MONTH = 38.0
     
     # Seuils d'analyse
     CPU_UTILIZATION_THRESHOLD = 0.3  # Si utilisation < 30%, surprovisionné
@@ -131,7 +137,6 @@ class CostAnalyzer:
         if utilization < self.CPU_UTILIZATION_THRESHOLD:
             # Recommande une réduction
             new_cpu_request = max(0.01, cpu_usage * 1.2)  # Ajoute 20% de marge
-            savings = (cpu_request - new_cpu_request) * self.CPU_COST_PER_MONTH
             
             rec = Recommendation(
                 workload_name=pod_name,
@@ -147,6 +152,7 @@ class CostAnalyzer:
                          f"Réduction possible de {cpu_request:.3f} à {new_cpu_request:.3f} cores",
                 priority='high' if utilization < 0.1 else 'medium'
             )
+            self._populate_cost_estimate(rec)
             self.recommendations.append(rec)
             logger.debug(f"Recommandation CPU pour {pod_key}: {rec.reasoning}")
     
@@ -186,6 +192,7 @@ class CostAnalyzer:
                          f"Réduction possible de {memory_request:.0f} à {new_memory_request:.0f} MiB",
                 priority='high' if utilization < 0.15 else 'medium'
             )
+            self._populate_cost_estimate(rec)
             self.recommendations.append(rec)
             logger.debug(f"Recommandation mémoire pour {pod_key}: {rec.reasoning}")
     
@@ -199,8 +206,6 @@ class CostAnalyzer:
         """Analyse les pods idle"""
         cpu_request = requests_limits.get('cpu_request', 0)
         memory_request = requests_limits.get('memory_request', 0)
-        total_savings = (cpu_request * self.CPU_COST_PER_MONTH +
-                        memory_request / 1024 * self.MEMORY_COST_PER_MONTH)
         
         rec = Recommendation(
             workload_name=pod_name,
@@ -216,6 +221,7 @@ class CostAnalyzer:
                      "Considérer la suppression ou le scale down.",
             priority='high'
         )
+        self._populate_cost_estimate(rec)
         self.recommendations.append(rec)
         logger.debug(f"Pod idle détecté: {pod_key}")
     
@@ -233,15 +239,17 @@ class CostAnalyzer:
         # Si des replicas ne sont jamais "ready", peut indiquer un problème
         if desired > 0 and ready < desired:
             failed_replicas = desired - ready
+            cpu_per_replica = deploy_info.get('cpu_request_per_replica', 0)
+            memory_per_replica = deploy_info.get('memory_request_per_replica', 0)
             rec = Recommendation(
                 workload_name=deploy_name,
                 namespace=namespace,
                 workload_type='deployment',
                 optimization_type='scale_down',
-                current_cpu_request=0,
-                recommended_cpu_request=0,
-                current_memory_request=0,
-                recommended_memory_request=0,
+                current_cpu_request=cpu_per_replica,
+                recommended_cpu_request=cpu_per_replica,
+                current_memory_request=memory_per_replica,
+                recommended_memory_request=memory_per_replica,
                 current_replicas=desired,
                 recommended_replicas=ready,
                 estimated_savings_percent=(failed_replicas / desired * 100) if desired > 0 else 0,
@@ -249,6 +257,7 @@ class CostAnalyzer:
                          f"Possibilité de réduire ou investiguer les erreurs.",
                 priority='medium'
             )
+            self._populate_cost_estimate(rec)
             self.recommendations.append(rec)
             logger.debug(f"Recommandation réplicas pour {deploy_key}: {rec.reasoning}")
     
@@ -267,19 +276,68 @@ class CostAnalyzer:
         for rec in self.recommendations:
             by_priority[rec.priority].append(rec)
         return by_priority
+
+    def calculate_recommendation_savings(self, rec: Recommendation) -> float:
+        """Calcule les économies mensuelles estimées pour une recommandation."""
+        return self.calculate_recommendation_savings_breakdown(rec)['monthly']
+
+    def calculate_recommendation_savings_breakdown(self, rec: Recommendation) -> Dict[str, float]:
+        """Calcule les économies par heure, semaine et mois pour une recommandation."""
+        current_costs = self._estimate_costs(
+            rec.current_cpu_request * rec.current_replicas,
+            rec.current_memory_request * rec.current_replicas,
+        )
+        recommended_costs = self._estimate_costs(
+            rec.recommended_cpu_request * rec.recommended_replicas,
+            rec.recommended_memory_request * rec.recommended_replicas,
+        )
+
+        return {
+            'hourly': max(0.0, current_costs['hourly'] - recommended_costs['hourly']),
+            'weekly': max(0.0, current_costs['weekly'] - recommended_costs['weekly']),
+            'monthly': max(0.0, current_costs['monthly'] - recommended_costs['monthly']),
+        }
+
+    def _estimate_costs(self, cpu_cores: float, memory_mib: float) -> Dict[str, float]:
+        """Estime le coût d'un workload selon le barème 2 vCPU / 8 Go."""
+        if cpu_cores <= 0 and memory_mib <= 0:
+            return {'hourly': 0.0, 'weekly': 0.0, 'monthly': 0.0}
+
+        cpu_units = cpu_cores / self.REFERENCE_CPU_CORES if cpu_cores > 0 else 0.0
+        memory_units = (memory_mib / 1024) / self.REFERENCE_MEMORY_GIB if memory_mib > 0 else 0.0
+        bundle_units = max(cpu_units, memory_units)
+
+        hourly = bundle_units * self.REFERENCE_RATE_PER_HOUR
+        weekly = bundle_units * self.REFERENCE_RATE_PER_WEEK
+        monthly = bundle_units * self.REFERENCE_RATE_PER_MONTH
+
+        return {
+            'hourly': hourly,
+            'weekly': weekly,
+            'monthly': monthly,
+        }
+
+    def _populate_cost_estimate(self, rec: Recommendation):
+        """Renseigne les économies monétaires calculées directement dans la recommandation."""
+        breakdown = self.calculate_recommendation_savings_breakdown(rec)
+        rec.estimated_savings_hourly = breakdown['hourly']
+        rec.estimated_savings_weekly = breakdown['weekly']
+        rec.estimated_savings_monthly = breakdown['monthly']
+        return rec
     
     def calculate_total_savings(self) -> float:
-        """Calcule les économies potentielles totales en $/mois"""
-        total = 0
+        """Calcule les économies potentielles totales en €/mois"""
+        return self.calculate_total_savings_breakdown()['monthly']
+
+    def calculate_total_savings_breakdown(self) -> Dict[str, float]:
+        """Calcule les économies totales par heure, semaine et mois."""
+        totals = {'hourly': 0.0, 'weekly': 0.0, 'monthly': 0.0}
         for rec in self.recommendations:
-            cpu_savings = (rec.current_cpu_request - rec.recommended_cpu_request) * self.CPU_COST_PER_MONTH
-            memory_savings = ((rec.current_memory_request - rec.recommended_memory_request) / 1024 *
-                            self.MEMORY_COST_PER_MONTH)
-            replica_savings = ((rec.current_replicas - rec.recommended_replicas) *
-                             (rec.current_cpu_request * self.CPU_COST_PER_MONTH +
-                              rec.current_memory_request / 1024 * self.MEMORY_COST_PER_MONTH))
-            total += cpu_savings + memory_savings + replica_savings
-        return total
+            breakdown = self.calculate_recommendation_savings_breakdown(rec)
+            totals['hourly'] += breakdown['hourly']
+            totals['weekly'] += breakdown['weekly']
+            totals['monthly'] += breakdown['monthly']
+        return totals
     
     def calculate_optimization_score(self) -> float:
         """

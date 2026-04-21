@@ -402,7 +402,10 @@ class ReportGenerator:
                 <div class="summary-grid">
                     <div class="summary-card">
                         <h3>💰 Économies potentielles</h3>
-                        <div class="value">${{ total_savings | round(2) }}/mois</div>
+                        <div class="value">€{{ total_savings_monthly | round(2) }}/mois</div>
+                        <div style="margin-top: 8px; font-size: 0.95em; opacity: 0.9;">
+                            €{{ total_savings_hourly | round(4) }}/h · €{{ total_savings_weekly | round(2) }}/semaine
+                        </div>
                     </div>
                     <div class="summary-card">
                         <h3>🎯 Score d'optimisation</h3>
@@ -477,7 +480,11 @@ class ReportGenerator:
                                 📋 {{ rec.reasoning }}
                             </div>
                             
-                            <span class="savings">💡 Économies: {{ rec.estimated_savings_percent | round(1) }}%</span>
+                            <span class="savings">
+                                💡 {{ rec.estimated_savings_hourly | round(4) }} €/h ·
+                                {{ rec.estimated_savings_weekly | round(2) }} €/semaine ·
+                                {{ rec.estimated_savings_monthly | round(2) }} €/mois
+                            </span>
                         </div>
                         {% endfor %}
                     </div>
@@ -498,6 +505,9 @@ class ReportGenerator:
                             <th>Type</th>
                             <th>Priorité</th>
                             <th>Économies %</th>
+                            <th>€/h</th>
+                            <th>€/semaine</th>
+                            <th>€/mois</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -512,6 +522,9 @@ class ReportGenerator:
                                 </span>
                             </td>
                             <td>{{ rec.estimated_savings_percent | round(1) }}%</td>
+                            <td>{{ rec.estimated_savings_hourly | round(4) }}</td>
+                            <td>{{ rec.estimated_savings_weekly | round(2) }}</td>
+                            <td>{{ rec.estimated_savings_monthly | round(2) }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -537,7 +550,10 @@ class ReportGenerator:
                         </div>
                         <div class="summary-card" style="background: white; border: 1px solid #ddd;">
                             <h3>Économies potentielles</h3>
-                            <div class="value">${{ ns_summary.potential_savings | round(2) }}/mois</div>
+                            <div class="value">€{{ ns_summary.potential_savings_monthly | round(2) }}/mois</div>
+                            <div style="margin-top: 8px; font-size: 0.95em; color: #666;">
+                                €{{ ns_summary.potential_savings_hourly | round(4) }}/h · €{{ ns_summary.potential_savings_weekly | round(2) }}/semaine
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -583,20 +599,25 @@ class ReportGenerator:
         recommendations = self.analyzer.recommendations
         recommendations_by_priority = self.analyzer.get_recommendations_by_priority()
         recommendations_by_namespace = self.analyzer.get_recommendations_by_namespace()
+        total_savings = self.analyzer.calculate_total_savings_breakdown()
         
         # Calcule les statistiques
         namespace_summaries = []
         if include_namespace_summary:
             for ns, recs in recommendations_by_namespace.items():
+                ns_breakdown = {'hourly': 0.0, 'weekly': 0.0, 'monthly': 0.0}
+                for rec in recs:
+                    breakdown = self.analyzer.calculate_recommendation_savings_breakdown(rec)
+                    ns_breakdown['hourly'] += breakdown['hourly']
+                    ns_breakdown['weekly'] += breakdown['weekly']
+                    ns_breakdown['monthly'] += breakdown['monthly']
                 ns_summary = {
                     'namespace': ns,
                     'recommendations_count': len(recs),
                     'pods_count': len(set(f"{r.namespace}/{r.workload_name}" for r in recs)),
-                    'potential_savings': sum(
-                        r.estimated_savings_percent * (r.current_cpu_request * 10 +
-                                                      r.current_memory_request / 1024)
-                        for r in recs
-                    )
+                    'potential_savings_hourly': ns_breakdown['hourly'],
+                    'potential_savings_weekly': ns_breakdown['weekly'],
+                    'potential_savings_monthly': ns_breakdown['monthly'],
                 }
                 namespace_summaries.append(ns_summary)
         
@@ -607,7 +628,9 @@ class ReportGenerator:
             'pods_count': len(set(f"{r.namespace}/{r.workload_name}" for r in recommendations)),
             'recommendations_count': len(recommendations),
             'high_priority_count': len(recommendations_by_priority['high']),
-            'total_savings': self.analyzer.calculate_total_savings(),
+            'total_savings_hourly': total_savings['hourly'],
+            'total_savings_weekly': total_savings['weekly'],
+            'total_savings_monthly': total_savings['monthly'],
             'optimization_score': self.analyzer.calculate_optimization_score(),
             'recommendations': recommendations,
             'recommendations_by_priority': recommendations_by_priority,
