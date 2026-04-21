@@ -349,9 +349,6 @@ def _read_latest_report_statuses(limit: int = 50):
 
 def _render_frontend_html() -> str:
         """Construit un front type explorateur pour naviguer les rapports par dossier."""
-        reports = _read_latest_report_statuses(limit=200)
-        reports_json = json.dumps(reports, ensure_ascii=True).replace("</", "<\\/")
-
         return f"""<!doctype html>
 <html lang='fr'>
 <head>
@@ -537,7 +534,7 @@ def _render_frontend_html() -> str:
     </div>
 
     <script>
-        const reports = {reports_json};
+        const reports = [];
         const statusEl = document.getElementById('action-status');
         const nsSelect = document.getElementById('namespace-select');
         const treeEl = document.getElementById('folder-tree');
@@ -797,6 +794,13 @@ def _render_frontend_html() -> str:
             }}
         }}
 
+        async function loadReports() {{
+            const res = await fetch('/api/reports');
+            if (!res.ok) throw new Error('Erreur API reports');
+            const data = await res.json();
+            reports.splice(0, reports.length, ...(Array.isArray(data) ? data : []));
+        }}
+
         async function generate(scope, namespace='') {{
             setStatus('Generation en cours...');
             try {{
@@ -833,8 +837,21 @@ def _render_frontend_html() -> str:
             }});
         }});
 
-        loadNamespaces();
-        render();
+        async function init() {{
+            try {{
+                await Promise.all([loadNamespaces(), loadReports()]);
+                render();
+                setStatus('Explorateur charge.');
+            }} catch (e) {{
+                setStatus(`Erreur chargement front: ${{e.message || 'inconnue'}}`);
+            }}
+        }}
+
+        window.addEventListener('error', (e) => {{
+            setStatus(`Erreur JS: ${{e.message}}`);
+        }});
+
+        init();
     </script>
 </body>
 </html>
