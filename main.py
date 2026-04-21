@@ -9,7 +9,7 @@ import os
 import json
 import threading
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from urllib.parse import urlparse
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from kubernetes import client, config
@@ -307,6 +307,13 @@ def _run_analysis(spec: Dict, name: str, namespace: str):
         auto_apply = spec.get("autoApply", False)
         prometheus_url = spec.get("prometheusUrl", None)
         cluster_name = spec.get("clusterName", "kubernetes")
+        exclude_namespaces: List[str] = list(spec.get("excludeNamespaces", []))
+
+        # Exclut par défaut le namespace de l'opérateur pour éviter l'auto-analyse bruitée.
+        operator_namespace = os.getenv("POD_NAMESPACE", "cost-operator-system")
+        if scope == "cluster" and operator_namespace not in exclude_namespaces:
+            exclude_namespaces.append(operator_namespace)
+        logger.info(f"Namespaces exclus de l'analyse: {exclude_namespaces}")
         
         # Détermine le scope d'analyse
         analysis_namespace = namespace if scope == "namespace" else None
@@ -318,7 +325,10 @@ def _run_analysis(spec: Dict, name: str, namespace: str):
         # Analyse
         logger.info("Analyse des optimisations...")
         analyzer = CostAnalyzer(metrics_collector)
-        recommendations = analyzer.analyze(namespace=analysis_namespace)
+        recommendations = analyzer.analyze(
+            namespace=analysis_namespace,
+            exclude_namespaces=exclude_namespaces,
+        )
         
         logger.info(f"Analyse complétée: {len(recommendations)} recommandations")
         

@@ -3,7 +3,7 @@ Module d'analyse des optimisations possibles
 """
 
 import logging
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional, Set
 from dataclasses import dataclass, asdict
 from metrics import MetricsCollector
 
@@ -53,17 +53,19 @@ class CostAnalyzer:
         self.metrics = metrics_collector
         self.recommendations: List[Recommendation] = []
     
-    def analyze(self, namespace: str = None) -> List[Recommendation]:
+    def analyze(self, namespace: str = None, exclude_namespaces: Optional[List[str]] = None) -> List[Recommendation]:
         """
         Lance l'analyse complète
         
         Args:
             namespace: Namespace à analyser (None = tous)
+            exclude_namespaces: Namespaces à exclure de l'analyse
         
         Returns:
             List[Recommendation]: Liste des recommandations
         """
         self.recommendations = []
+        excluded: Set[str] = set(exclude_namespaces or [])
         
         # Récupère les données
         pod_requests_limits = self.metrics.get_pod_requests_limits(namespace)
@@ -73,11 +75,14 @@ class CostAnalyzer:
         
         # Analyse les pods
         for pod_key, rl in pod_requests_limits.items():
+            ns, pod_name = pod_key.split('/')
+            if ns in excluded:
+                continue
+
             if pod_key not in pod_metrics:
                 continue
             
             pod_metrics_data = pod_metrics[pod_key]
-            ns, pod_name = pod_key.split('/')
             
             # Détecte les pods idle
             if pod_key in idle_pods:
@@ -93,6 +98,8 @@ class CostAnalyzer:
         # Analyse les déploiements
         for deploy_key, deploy_info in deployments.items():
             ns, deploy_name = deploy_key.split('/')
+            if ns in excluded:
+                continue
             self._analyze_deployment_replicas(deploy_key, ns, deploy_name, deploy_info)
         
         # Trie par priorité et économies potentielles

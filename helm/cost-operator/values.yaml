@@ -205,6 +205,7 @@ reports:
     prometheusUrl: ""
     clusterName: "kubernetes"
     excludeNamespaces:
+      - cost-operator-system
       - kube-system
       - kube-public
       - kube-node-lease

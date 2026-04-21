@@ -51,17 +51,15 @@ class MetricsCollector:
         metrics = {}
         
         try:
+            namespace_selector = f',namespace="{namespace}"' if namespace else ""
+
             # Requête pour CPU
-            cpu_query = 'rate(container_cpu_usage_seconds_total{pod!=""}[5m])'
-            if namespace:
-                cpu_query += f'{{namespace="{namespace}"}}'
+            cpu_query = f'rate(container_cpu_usage_seconds_total{{pod!=""{namespace_selector}}}[5m])'
             
             cpu_response = self._query_prometheus(cpu_query)
             
             # Requête pour Mémoire
-            memory_query = 'container_memory_usage_bytes{pod!=""}'
-            if namespace:
-                memory_query += f'{{namespace="{namespace}"}}'
+            memory_query = f'container_memory_usage_bytes{{pod!=""{namespace_selector}}}'
             
             memory_response = self._query_prometheus(memory_query)
             
@@ -108,7 +106,10 @@ class MetricsCollector:
         metrics = {}
         
         try:
-            pods = self.v1.list_namespaced_pod(namespace=namespace or "default")
+            if namespace:
+                pods = self.v1.list_namespaced_pod(namespace=namespace)
+            else:
+                pods = self.v1.list_pod_for_all_namespaces()
             
             for pod in pods.items:
                 pod_namespace = pod.metadata.namespace
@@ -132,7 +133,7 @@ class MetricsCollector:
                     if limits.get('memory'):
                         metrics[pod_key]['memory_limit'] = self._parse_memory(limits['memory'])
             
-            logger.info(f"Collecté {len(metrics)} pods depuis metrics-server")
+            logger.info(f"Collecté {len(metrics)} pods depuis metrics-server (scope={'namespace' if namespace else 'cluster'})")
             
         except ApiException as e:
             logger.error(f"Erreur API Kubernetes: {e}")
