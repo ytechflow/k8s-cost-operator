@@ -353,108 +353,108 @@ def _render_frontend_html() -> str:
 
 
 class FrontendHandler(BaseHTTPRequestHandler):
-        def _send(self, body: str, status: int = 200, content_type: str = "text/html; charset=utf-8"):
-                payload = body.encode("utf-8")
-                self.send_response(status)
-                self.send_header("Content-Type", content_type)
-                self.send_header("Content-Length", str(len(payload)))
-                self.end_headers()
-                self.wfile.write(payload)
+    def _send(self, body: str, status: int = 200, content_type: str = "text/html; charset=utf-8"):
+        payload = body.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
 
-        def log_message(self, fmt, *args):
-                logger.debug("frontend: " + fmt, *args)
+    def log_message(self, fmt, *args):
+        logger.debug("frontend: " + fmt, *args)
 
-        def do_GET(self):
-                parsed = urlparse(self.path)
-                path = parsed.path
+    def do_GET(self):
+        parsed = urlparse(self.path)
+        path = parsed.path
 
-                if path in ("/", "/index.html"):
-                        return self._send(_render_frontend_html())
+        if path in ("/", "/index.html"):
+            return self._send(_render_frontend_html())
 
-                if path == "/healthz":
-                        return self._send("ok", content_type="text/plain; charset=utf-8")
+        if path == "/healthz":
+            return self._send("ok", content_type="text/plain; charset=utf-8")
 
-                if path == "/ready":
-                        return self._send("ready", content_type="text/plain; charset=utf-8")
+        if path == "/ready":
+            return self._send("ready", content_type="text/plain; charset=utf-8")
 
-                if path == "/api/reports":
-                        data = json.dumps(_read_latest_report_statuses(limit=200), ensure_ascii=True, indent=2)
-                        return self._send(data, content_type="application/json; charset=utf-8")
+        if path == "/api/reports":
+            data = json.dumps(_read_latest_report_statuses(limit=200), ensure_ascii=True, indent=2)
+            return self._send(data, content_type="application/json; charset=utf-8")
 
-                if path == "/api/namespaces":
-                    data = json.dumps({"namespaces": _list_namespaces()}, ensure_ascii=True, indent=2)
-                    return self._send(data, content_type="application/json; charset=utf-8")
+        if path == "/api/namespaces":
+            data = json.dumps({"namespaces": _list_namespaces()}, ensure_ascii=True, indent=2)
+            return self._send(data, content_type="application/json; charset=utf-8")
 
-                if path.startswith("/report/"):
-                        parts = [p for p in path.split("/") if p]
-                        if len(parts) != 3:
-                                return self._send("invalid report path", status=400, content_type="text/plain; charset=utf-8")
+        if path.startswith("/report/"):
+            parts = [p for p in path.split("/") if p]
+            if len(parts) != 3:
+                return self._send("invalid report path", status=400, content_type="text/plain; charset=utf-8")
 
-                        namespace = parts[1]
-                        configmap_name = parts[2]
-                        try:
-                                report_cm = v1.read_namespaced_config_map(configmap_name, namespace)
-                                html = (report_cm.data or {}).get("report.html")
-                                if not html:
-                                        return self._send("report not found in configmap", status=404, content_type="text/plain; charset=utf-8")
-                                return self._send(html)
-                        except ApiException as exc:
-                                if exc.status == 404:
-                                        return self._send("report configmap not found", status=404, content_type="text/plain; charset=utf-8")
-                                logger.error(f"Erreur lecture rapport {namespace}/{configmap_name}: {exc}")
-                                return self._send("internal error", status=500, content_type="text/plain; charset=utf-8")
+            namespace = parts[1]
+            configmap_name = parts[2]
+            try:
+                report_cm = v1.read_namespaced_config_map(configmap_name, namespace)
+                html = (report_cm.data or {}).get("report.html")
+                if not html:
+                    return self._send("report not found in configmap", status=404, content_type="text/plain; charset=utf-8")
+                return self._send(html)
+            except ApiException as exc:
+                if exc.status == 404:
+                    return self._send("report configmap not found", status=404, content_type="text/plain; charset=utf-8")
+                logger.error(f"Erreur lecture rapport {namespace}/{configmap_name}: {exc}")
+                return self._send("internal error", status=500, content_type="text/plain; charset=utf-8")
 
-                return self._send("not found", status=404, content_type="text/plain; charset=utf-8")
+        return self._send("not found", status=404, content_type="text/plain; charset=utf-8")
 
-            def do_POST(self):
-                parsed = urlparse(self.path)
-                path = parsed.path
+    def do_POST(self):
+        parsed = urlparse(self.path)
+        path = parsed.path
 
-                if path != "/api/reports/generate":
-                    return self._send("not found", status=404, content_type="text/plain; charset=utf-8")
+        if path != "/api/reports/generate":
+            return self._send("not found", status=404, content_type="text/plain; charset=utf-8")
 
-                try:
-                    content_length = int(self.headers.get("Content-Length", "0"))
-                    raw = self.rfile.read(content_length).decode("utf-8") if content_length > 0 else "{}"
-                    payload = json.loads(raw)
+        try:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw = self.rfile.read(content_length).decode("utf-8") if content_length > 0 else "{}"
+            payload = json.loads(raw)
 
-                    scope = payload.get("scope", "cluster")
-                    namespace = payload.get("namespace")
+            scope = payload.get("scope", "cluster")
+            namespace = payload.get("namespace")
 
-                    if scope not in ("cluster", "namespace"):
-                        return self._send(
-                            json.dumps({"error": "scope invalide"}),
-                            status=400,
-                            content_type="application/json; charset=utf-8",
-                        )
+            if scope not in ("cluster", "namespace"):
+                return self._send(
+                    json.dumps({"error": "scope invalide"}),
+                    status=400,
+                    content_type="application/json; charset=utf-8",
+                )
 
-                    if scope == "namespace" and not namespace:
-                        return self._send(
-                            json.dumps({"error": "namespace requis"}),
-                            status=400,
-                            content_type="application/json; charset=utf-8",
-                        )
+            if scope == "namespace" and not namespace:
+                return self._send(
+                    json.dumps({"error": "namespace requis"}),
+                    status=400,
+                    content_type="application/json; charset=utf-8",
+                )
 
-                    report = _create_manual_costreport(scope=scope, target_namespace=namespace)
-                    return self._send(
-                        json.dumps(report, ensure_ascii=True),
-                        status=201,
-                        content_type="application/json; charset=utf-8",
-                    )
-                except ApiException as exc:
-                    logger.error(f"Erreur API K8s génération rapport: {exc}")
-                    return self._send(
-                        json.dumps({"error": "erreur Kubernetes API"}),
-                        status=500,
-                        content_type="application/json; charset=utf-8",
-                    )
-                except Exception as exc:
-                    logger.error(f"Erreur génération rapport: {exc}")
-                    return self._send(
-                        json.dumps({"error": str(exc)}),
-                        status=500,
-                        content_type="application/json; charset=utf-8",
-                    )
+            report = _create_manual_costreport(scope=scope, target_namespace=namespace)
+            return self._send(
+                json.dumps(report, ensure_ascii=True),
+                status=201,
+                content_type="application/json; charset=utf-8",
+            )
+        except ApiException as exc:
+            logger.error(f"Erreur API K8s génération rapport: {exc}")
+            return self._send(
+                json.dumps({"error": "erreur Kubernetes API"}),
+                status=500,
+                content_type="application/json; charset=utf-8",
+            )
+        except Exception as exc:
+            logger.error(f"Erreur génération rapport: {exc}")
+            return self._send(
+                json.dumps({"error": str(exc)}),
+                status=500,
+                content_type="application/json; charset=utf-8",
+            )
 
 
 def _start_frontend_server():
