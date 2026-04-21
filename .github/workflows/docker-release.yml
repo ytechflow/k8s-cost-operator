@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       HARBOR_REGISTRY: harbor.dev01.sayzx.fr
-      IMAGE_REPOSITORY: admin/cost-operator
+      IMAGE_REPOSITORY: cost-operator/cost-operator
     permissions:
       contents: write
       packages: write
@@ -26,8 +26,8 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ${{ env.HARBOR_REGISTRY }}
-          username: ${{ secrets.harbor_user }}
-          password: ${{ secrets.harbor_pass }}
+          username: ${{ secrets.HARBOR_USER || secrets.harbor_user }}
+          password: ${{ secrets.HARBOR_PASSWORD || secrets.harbor_pass }}
       
       - name: Extract version from tag
         id: version
