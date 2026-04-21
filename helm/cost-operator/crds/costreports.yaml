@@ -64,6 +64,10 @@ spec:
                   type: string
                   default: "kubernetes"
 
+                folder:
+                  type: string
+                  description: "Dossier logique pour regrouper les rapports dans le front"
+
                 excludeNamespaces:
                   type: array
                   items:

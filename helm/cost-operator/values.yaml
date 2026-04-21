@@ -204,6 +204,7 @@ reports:
     autoApply: false
     prometheusUrl: ""
     clusterName: "kubernetes"
+    folder: ""
     excludeNamespaces:
       - cost-operator-system
       - kube-system

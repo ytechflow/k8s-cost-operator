@@ -35,7 +35,7 @@ rules:
   # CRDs
   - apiGroups: ["cost.k8s.io"]
     resources: ["costreports"]
-    verbs: ["get", "list", "watch", "create", "patch", "update"]
+    verbs: ["get", "list", "watch", "create", "patch", "update", "delete"]
   
   - apiGroups: ["cost.k8s.io"]
     resources: ["costreports/status"]
@@ -44,7 +44,7 @@ rules:
   # ConfigMaps
   - apiGroups: [""]
     resources: ["configmaps"]
-    verbs: ["get", "list", "create", "patch", "update"]
+    verbs: ["get", "list", "create", "patch", "update", "delete"]
   
   # Namespaces
   - apiGroups: [""]

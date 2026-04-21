@@ -14,6 +14,9 @@ spec:
   outputPath: {{ .Values.reports.default.outputPath }}
   autoApply: {{ .Values.reports.default.autoApply }}
   clusterName: {{ .Values.reports.default.clusterName }}
+  {{- if .Values.reports.default.folder }}
+  folder: {{ .Values.reports.default.folder | quote }}
+  {{- end }}
   {{- if .Values.reports.default.prometheusUrl }}
   prometheusUrl: {{ .Values.reports.default.prometheusUrl }}
   {{- else if .Values.config.prometheusUrl }}

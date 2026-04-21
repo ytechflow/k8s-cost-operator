@@ -83,6 +83,8 @@ Puis ouvrir:
 - `http://localhost:8080/ready`
 - `http://localhost:8080/api/reports`
 
+Depuis le front, tu peux aussi filtrer les rapports par dossier, déplacer un rapport dans un dossier, ou le supprimer directement.
+
 ## 📖 Utilisation
 
 ### Créer un rapport automatique
@@ -107,6 +109,21 @@ open report.html
 ```
 
 ### Configuration avancée
+
+#### Dossier de rapport
+
+Le champ `spec.folder` permet de ranger un rapport dans le front de l'opérateur:
+
+```yaml
+apiVersion: cost.k8s.io/v1
+kind: CostReport
+metadata:
+  name: daily-analysis
+  namespace: default
+spec:
+  scope: cluster
+  folder: production
+```
 
 #### Avec Prometheus
 

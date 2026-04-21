@@ -18,6 +18,9 @@ spec:
   
   # Nom du cluster pour le rapport
   clusterName: "production"
+
+  # Dossier logique pour retrouver le rapport dans le front
+  folder: "production"
   
   # Ne pas appliquer automatiquement les recommandations
   autoApply: false
@@ -51,6 +54,9 @@ spec:
   
   # Cluster name
   clusterName: "production"
+
+  # Dossier logique pour retrouver le rapport dans le front
+  folder: "production"
   
   # Auto-apply mode désactivé (sécurité)
   autoApply: false
