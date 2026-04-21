@@ -75,6 +75,8 @@ securityContext:
   runAsNonRoot: true
   runAsUser: 1000
   fsGroup: 1000
+
+containerSecurityContext:
   allowPrivilegeEscalation: false
   readOnlyRootFilesystem: true
   capabilities:
