@@ -112,6 +112,22 @@ service:
     # prometheus.io/scrape: "true"
     # prometheus.io/port: "8080"
 
+# Ingress
+ingress:
+  enabled: true
+  className: nginx
+  annotations: {}
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: cost.dev01.sayzx.fr
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+    # - secretName: cost-operator-tls
+    #   hosts:
+    #     - cost.dev01.sayzx.fr
+
 # Configuration de l'opérateur
 config:
   # Activer/désactiver le debug

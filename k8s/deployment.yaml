@@ -93,3 +93,23 @@ metadata:
   namespace: kube-system
 data:
   cluster-name: "production"
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cost-operator
+  namespace: kube-system
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: cost.dev01.sayzx.fr
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: cost-operator
+            port:
+              number: 8080
