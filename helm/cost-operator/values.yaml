@@ -4,7 +4,7 @@
 # Image Docker
 image:
   # Repository complet de l'image
-  repository: harbor.dev01.sayzx.fr/admin/cost-operator
+  repository: harbor.dev01.sayzx.fr/cost-operator/cost-operator
   # Tag de l'image
   tag: "latest"
   # Politique de pull
