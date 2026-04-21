@@ -6,8 +6,12 @@ Utilise kopf pour gérer la CRD CostReport
 import kopf
 import logging
 import os
+import json
+import threading
 from datetime import datetime
 from typing import Dict, Optional
+from urllib.parse import urlparse
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
@@ -27,6 +31,202 @@ except config.config_exception.ConfigException:
 
 v1 = client.CoreV1Api()
 custom_api = client.CustomObjectsApi()
+
+HTTP_HOST = os.getenv("HTTP_HOST", "0.0.0.0")
+HTTP_PORT = int(os.getenv("HTTP_PORT", "8080"))
+
+
+def _read_latest_report_statuses(limit: int = 50):
+        """Récupère les ConfigMaps de statut des rapports pour alimenter le front."""
+        reports = []
+        try:
+                configmaps = v1.list_config_map_for_all_namespaces(
+                        label_selector="type=cost-report-status"
+                )
+        except Exception as exc:
+                logger.error(f"Erreur de lecture des statuts de rapports: {exc}")
+                return reports
+
+        for item in configmaps.items:
+                data = item.data or {}
+                reports.append(
+                        {
+                                "name": item.metadata.name,
+                                "namespace": item.metadata.namespace,
+                                "report": data.get("configmap_name", ""),
+                                "timestamp": data.get("timestamp", ""),
+                                "recommendations": data.get("recommendations_count", ""),
+                                "savings": data.get("total_savings", ""),
+                                "score": data.get("optimization_score", ""),
+                                "status": data.get("status", "unknown"),
+                        }
+                )
+
+        reports.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+        return reports[:limit]
+
+
+def _render_frontend_html() -> str:
+        """Construit un front HTML léger pour visualiser les analyses récentes."""
+        rows = []
+        for report in _read_latest_report_statuses(limit=100):
+                view_link = "-"
+                if report["report"]:
+                        view_link = (
+                                f"<a href='/report/{report['namespace']}/{report['report']}'>"
+                                "ouvrir le rapport"
+                                "</a>"
+                        )
+
+                rows.append(
+                        "<tr>"
+                        f"<td>{report['namespace']}</td>"
+                        f"<td>{report['name']}</td>"
+                        f"<td>{report['timestamp'] or '-'}</td>"
+                        f"<td>{report['status']}</td>"
+                        f"<td>{report['recommendations'] or '-'}</td>"
+                        f"<td>{report['savings'] or '-'}</td>"
+                        f"<td>{report['score'] or '-'}</td>"
+                        f"<td>{view_link}</td>"
+                        "</tr>"
+                )
+
+        table_body = "".join(rows) or (
+                "<tr><td colspan='8'>Aucun rapport trouvé pour le moment.</td></tr>"
+        )
+
+        return f"""<!doctype html>
+<html lang='fr'>
+<head>
+    <meta charset='utf-8' />
+    <meta name='viewport' content='width=device-width, initial-scale=1' />
+    <title>Cost Operator Front</title>
+    <style>
+        :root {{
+            --bg: #0b1320;
+            --bg2: #111a2a;
+            --card: #182437;
+            --text: #e8f0ff;
+            --muted: #9cb0d3;
+            --accent: #1fc3a7;
+            --border: #2a3b56;
+        }}
+        body {{
+            margin: 0;
+            font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+            color: var(--text);
+            background: radial-gradient(circle at 10% 20%, #132746 0%, var(--bg) 40%), var(--bg2);
+            min-height: 100vh;
+        }}
+        .wrap {{ max-width: 1100px; margin: 0 auto; padding: 24px; }}
+        h1 {{ margin-bottom: 8px; }}
+        p {{ color: var(--muted); margin-top: 0; }}
+        .card {{
+            background: color-mix(in oklab, var(--card), black 8%);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            overflow: hidden;
+        }}
+        table {{ width: 100%; border-collapse: collapse; font-size: 14px; }}
+        th, td {{ padding: 12px; text-align: left; border-bottom: 1px solid var(--border); }}
+        th {{ background: color-mix(in oklab, var(--card), black 15%); }}
+        tr:hover td {{ background: color-mix(in oklab, var(--card), black 6%); }}
+        a {{ color: var(--accent); text-decoration: none; }}
+        .links {{ margin-top: 16px; display: flex; gap: 14px; flex-wrap: wrap; }}
+        @media (max-width: 760px) {{
+            table {{ font-size: 12px; }}
+            th, td {{ padding: 8px; }}
+        }}
+    </style>
+</head>
+<body>
+    <div class='wrap'>
+        <h1>K8s Cost Operator</h1>
+        <p>Vue rapide des analyses générées par l'opérateur.</p>
+        <div class='card'>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Namespace</th>
+                        <th>Status ConfigMap</th>
+                        <th>Timestamp</th>
+                        <th>Etat</th>
+                        <th>Reco</th>
+                        <th>Economies</th>
+                        <th>Score</th>
+                        <th>Rapport</th>
+                    </tr>
+                </thead>
+                <tbody>{table_body}</tbody>
+            </table>
+        </div>
+        <div class='links'>
+            <a href='/healthz'>/healthz</a>
+            <a href='/ready'>/ready</a>
+            <a href='/api/reports'>/api/reports</a>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+
+class FrontendHandler(BaseHTTPRequestHandler):
+        def _send(self, body: str, status: int = 200, content_type: str = "text/html; charset=utf-8"):
+                payload = body.encode("utf-8")
+                self.send_response(status)
+                self.send_header("Content-Type", content_type)
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+        def log_message(self, fmt, *args):
+                logger.debug("frontend: " + fmt, *args)
+
+        def do_GET(self):
+                parsed = urlparse(self.path)
+                path = parsed.path
+
+                if path in ("/", "/index.html"):
+                        return self._send(_render_frontend_html())
+
+                if path == "/healthz":
+                        return self._send("ok", content_type="text/plain; charset=utf-8")
+
+                if path == "/ready":
+                        return self._send("ready", content_type="text/plain; charset=utf-8")
+
+                if path == "/api/reports":
+                        data = json.dumps(_read_latest_report_statuses(limit=200), ensure_ascii=True, indent=2)
+                        return self._send(data, content_type="application/json; charset=utf-8")
+
+                if path.startswith("/report/"):
+                        parts = [p for p in path.split("/") if p]
+                        if len(parts) != 3:
+                                return self._send("invalid report path", status=400, content_type="text/plain; charset=utf-8")
+
+                        namespace = parts[1]
+                        configmap_name = parts[2]
+                        try:
+                                report_cm = v1.read_namespaced_config_map(configmap_name, namespace)
+                                html = (report_cm.data or {}).get("report.html")
+                                if not html:
+                                        return self._send("report not found in configmap", status=404, content_type="text/plain; charset=utf-8")
+                                return self._send(html)
+                        except ApiException as exc:
+                                if exc.status == 404:
+                                        return self._send("report configmap not found", status=404, content_type="text/plain; charset=utf-8")
+                                logger.error(f"Erreur lecture rapport {namespace}/{configmap_name}: {exc}")
+                                return self._send("internal error", status=500, content_type="text/plain; charset=utf-8")
+
+                return self._send("not found", status=404, content_type="text/plain; charset=utf-8")
+
+
+def _start_frontend_server():
+        """Démarre le serveur HTTP embarqué (health probes + UI)."""
+        server = HTTPServer((HTTP_HOST, HTTP_PORT), FrontendHandler)
+        logger.info(f"Frontend HTTP démarré sur {HTTP_HOST}:{HTTP_PORT}")
+        server.serve_forever()
 
 
 @kopf.on.event(
@@ -342,4 +542,6 @@ def _apply_recommendations(recommendations: list):
 
 if __name__ == "__main__":
     logger.info("Démarrage de l'opérateur K8s Cost Optimization")
+    frontend_thread = threading.Thread(target=_start_frontend_server, daemon=True)
+    frontend_thread.start()
     kopf.run()

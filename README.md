@@ -68,6 +68,21 @@ kubectl -n cost-operator-system get pods -l app.kubernetes.io/instance=cost-oper
 kubectl -n cost-operator-system logs -f deployment/cost-operator
 ```
 
+### 5. Ouvrir le front de l'opérateur
+
+Le pod expose une interface web légère (statut + accès aux rapports):
+
+```bash
+kubectl -n cost-operator-system port-forward svc/cost-operator 8080:8080
+```
+
+Puis ouvrir:
+
+- `http://localhost:8080/`
+- `http://localhost:8080/healthz`
+- `http://localhost:8080/ready`
+- `http://localhost:8080/api/reports`
+
 ## 📖 Utilisation
 
 ### Créer un rapport automatique
@@ -248,6 +263,7 @@ kubectl -n cost-operator-system logs deployment/cost-operator
 
 # Vérifier les RBAC
 kubectl auth can-i list costreports --as=system:serviceaccount:cost-operator-system:cost-operator
+kubectl auth can-i list customresourcedefinitions.apiextensions.k8s.io --as=system:serviceaccount:cost-operator-system:cost-operator
 
 # Vérifier la CRD
 kubectl get crd | grep costreports
