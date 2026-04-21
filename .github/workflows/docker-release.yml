@@ -8,6 +8,9 @@ on:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+    env:
+      HARBOR_REGISTRY: harbor.dev01.sayzx.fr
+      IMAGE_REPOSITORY: admin/cost-operator
     permissions:
       contents: write
       packages: write
@@ -19,18 +22,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       
-      - name: Log in to Docker Hub
+      - name: Log in to Harbor
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-      
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          registry: ${{ env.HARBOR_REGISTRY }}
+          username: ${{ secrets.harbor_user }}
+          password: ${{ secrets.harbor_pass }}
       
       - name: Extract version from tag
         id: version
@@ -42,10 +39,8 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/cost-operator:${{ steps.version.outputs.VERSION }}
-            ${{ secrets.DOCKER_USERNAME }}/cost-operator:latest
-            ghcr.io/${{ github.repository }}:${{ steps.version.outputs.VERSION }}
-            ghcr.io/${{ github.repository }}:latest
+            ${{ env.HARBOR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.version.outputs.VERSION }}
+            ${{ env.HARBOR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:latest
           labels: |
             org.opencontainers.image.version=${{ steps.version.outputs.VERSION }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
@@ -61,8 +56,7 @@ jobs:
             ## Release v${{ steps.version.outputs.VERSION }}
             
             ### 🐳 Docker Images
-            - Docker Hub: `${{ secrets.DOCKER_USERNAME }}/cost-operator:${{ steps.version.outputs.VERSION }}`
-            - GHCR: `ghcr.io/${{ github.repository }}:${{ steps.version.outputs.VERSION }}`
+            - Harbor: `${{ env.HARBOR_REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.version.outputs.VERSION }}`
             
             ### 📦 Helm Installation
             ```bash
