@@ -83,6 +83,13 @@ spec:
               name: {{ .Values.configMap.name }}
               key: log-level
               optional: true
+
+        - name: EXCLUDE_NAMESPACES
+          valueFrom:
+            configMapKeyRef:
+              name: {{ .Values.configMap.name }}
+              key: exclude-namespaces
+              optional: true
         
         resources:
           {{- toYaml .Values.resources | nindent 12 }}
