@@ -553,7 +553,7 @@ def _render_frontend_html() -> str:
         const setStatus = (msg) => {{ statusEl.textContent = msg; }};
 
         const normalizeFolder = (value) => {{
-            return (value || '').replace(/\\/g, '/').split('/').map(v => v.trim()).filter(Boolean).join('/');
+            return (value || '').split('\\\\').join('/').split('/').map(v => v.trim()).filter(Boolean).join('/');
         }};
 
         const folderLabel = (value) => value || 'Sans dossier';
